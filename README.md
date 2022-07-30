@@ -4,7 +4,7 @@
 # Overview
 we employ ESTD to transfer a sentence from the source to the target text(higher empathy level). 
 
-![structure](https://raw.githubusercontent.com/MasonZMZ/ESTD/12c463deb90ef1df1aeed90f262fd3c3d2f2c7ef/img/structure.pdf?token=AIFPKDVOMWX5UTXUN2FORMDC4SFRU)
+![structure](https://github.com/MasonZMZ/ESTD/raw/main/img/structure.pdf)
 # Set-up
 ## Environment
 ```
