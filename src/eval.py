@@ -1,31 +1,29 @@
 import torch
-import torch.nn.functional as F
 
 from sentence_transformers import SentenceTransformer
 
-import os
-import time
-import random
 import argparse
 import numpy as np
-import shutil
 
 from tqdm import tqdm
 
 from model import *
 from data import *
 from train_estd import *
-from loss import CosineSimilarity
 
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
-from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from sklearn.metrics.pairwise import cosine_similarity
+
+import warnings
+
+warnings.filterwarnings('ignore')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=None)
 parser.add_argument('--gpu', default=0, type=int, help='GPU id to use.')
-parser.add_argument('--modelpath', type=str, default="/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model.pth")
+parser.add_argument('--modelpath', type=str, default="/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_g.pth")
 parser.add_argument('--model', type=str, default="ESTD")
 
 args = None
@@ -68,9 +66,22 @@ def main():
     if args.model == "ESTD":
         G = Seq2Seq(3, 3, emb_size=256, nhead=8, src_vocab_size=act_total_words, tgt_vocab_size=emp_total_words,
                 dim_feedforward=256)
-        G.load_state_dict(torch.load('/content/drive/MyDrive/empathetic/model_g.pth'))
+        G.load_state_dict(torch.load('/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_g.pth'))
         discriminator = Discriminator(device)
         G.eval()
+
+    similarity, perplexity, bleu_score, empathy_change = evaluation(test_dataloader, 
+                                                                    emp_bos_idx, 
+                                                                    emp_dict_rev, 
+                                                                    act_dict_rev, 
+                                                                    G, 
+                                                                    discriminator, 
+                                                                    model_bias, 
+                                                                    GPT_model, 
+                                                                    GPT_tokenizer, 
+                                                                    device)
+
+    print(f"Similarity: {similarity} | Perplexity: {perplexity} | BLEU: {bleu_score} | Empathy Change: {empathy_change}")
 
 
 def translate(src, src_mask, emp_bos_idx, Generator, max_len=40):
@@ -95,7 +106,7 @@ def perplexity(predicted, GPT_model, GPT_tokenizer, device, MAX_LEN=40):
     
         BATCH_SIZE = 1
 
-        tokenized_input = GPT_tokenizer.batch_encode_plus(predicted[i], max_length=MAX_LEN, pad_to_max_length=True, truncation=True)
+        tokenized_input = GPT_tokenizer.batch_encode_plus(predicted[i], max_length=MAX_LEN, padding=True, truncation=True)
         
         input_ids = tokenized_input['input_ids'] 
         attention_masks = tokenized_input['attention_mask']
@@ -122,11 +133,11 @@ def perplexity(predicted, GPT_model, GPT_tokenizer, device, MAX_LEN=40):
     return math.exp(np.mean(batch_perplexity))
 
 
-def similarity(tgt, pred, model_bias):
+def similarity(tgt, pred, emp_dict_rev, act_dict_rev, model_bias):
     batch_similarities = []
 
-    sentence_embeddings_act = model_bias.encode(decode_sents(tgt.transpose(0, 1)))
-    sentence_embeddings_emp = model_bias.encode(decode_sents(pred.transpose(0, 1)))
+    sentence_embeddings_act = model_bias.encode(decode_sents(tgt.transpose(0, 1), emp_dict_rev, act_dict_rev))
+    sentence_embeddings_emp = model_bias.encode(decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev))
 
     for i in range(sentence_embeddings_act.shape[0]):
         sent_similarity = cosine_similarity([sentence_embeddings_act[i]],[sentence_embeddings_emp[i]])
@@ -135,26 +146,27 @@ def similarity(tgt, pred, model_bias):
     return np.mean(np.array(batch_similarities))
 
 
-def bleu_score(pred, src):
+def bleu_score(pred, tgt, emp_dict_rev, act_dict_rev):
     batch_bleu = []
 
     smoothie = SmoothingFunction().method4
-    length = len(decode_sents(pred.transpose(0, 1)))
+    length = len(decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev))
     for i in range(length):
-        sent_bleu = sentence_bleu([decode_sents(pred.transpose(0, 1))[i]], decode_sents(src.transpose(0, 1), False)[i], smoothing_function=smoothie)
+        sent_bleu = sentence_bleu([decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev)[i]], 
+                                   decode_sents(tgt.transpose(0, 1), emp_dict_rev, act_dict_rev)[i], smoothing_function=smoothie)
         batch_bleu.append(sent_bleu)
 
     return np.mean(np.array(batch_bleu))
 
 
-def empathy_change(src, pred, model):
-    original_emp = torch.mean(model.predict(decode_sents(src.transpose(0, 1), False)))
-    generate_emp = torch.mean(model.predict(decode_sents(pred.transpose(0, 1))))
+def empathy_change(src, pred, emp_dict_rev, act_dict_rev, model):
+    original_emp = torch.mean(model.predict(decode_sents(src.transpose(0, 1), emp_dict_rev, act_dict_rev, False)))
+    generate_emp = torch.mean(model.predict(decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev)))
     change = int(generate_emp) - int(original_emp)
     return change
 
 
-def evaluation(test_dataloader, emp_bos_idx, model_g, model_d, model_bias, GPT_model, GPT_tokenizer, device):
+def evaluation(test_dataloader, emp_bos_idx, emp_dict_rev, act_dict_rev, model_g, model_d, model_bias, GPT_model, GPT_tokenizer, device):
 
     similarities = []
     perplexities = []
@@ -169,12 +181,12 @@ def evaluation(test_dataloader, emp_bos_idx, model_g, model_d, model_bias, GPT_m
         
         pred = translate(src, src_mask, emp_bos_idx, model_g)
        
-        similarities.append(similarity(tgt, pred, model_bias))
-        perplexities.append(perplexity(decode_sents(pred.transpose(0, 1)), GPT_model, GPT_tokenizer, device))
-        bleu_scores.append(pred, src)
-        empathylevel.append(empathy_change(src, pred, model_d))
+        similarities.append(similarity(tgt, pred, emp_dict_rev, act_dict_rev, model_bias))
+        perplexities.append(perplexity(decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev), GPT_model, GPT_tokenizer, device))
+        bleu_scores.append(bleu_score(pred, tgt, emp_dict_rev, act_dict_rev))
+        empathylevel.append(empathy_change(src, pred, emp_dict_rev, act_dict_rev, model_d))
            
-    return np.mean(np.array(similarities)), np.mean(np.array(perplexities)), np.mean(np.array(bleu_scores)), np.mean(np.array(empathylevel)), 
+    return np.mean(np.array(similarities)), np.mean(np.array(perplexities)), np.mean(np.array(bleu_scores)), np.mean(np.array(empathylevel))
 
 
 if __name__ == '__main__':
