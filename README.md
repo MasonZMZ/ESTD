@@ -4,7 +4,7 @@
 # Overview
 we employ ESTD to transfer a sentence from the source to the target text(higher empathy level). 
 
-![framework](structure.pdf)
+![structure](structure.pdf)
 # Set-up
 ## Environment
 ```
