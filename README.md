@@ -4,9 +4,7 @@
 # Overview
 we employ ESTD to transfer a sentence from the source to the target text(higher empathy level). 
 
-<p>
-    <img src="img/structure.pdf" width="220" height="240" />
-</p>
+![structure](/img/structure.pdf)
 # Set-up
 ## Environment
 ```
