@@ -32,7 +32,7 @@ args = None
 SOS_token = 0
 EOS_token = 1
 
-result_path_gpt2 = '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/src/gpt2/GPT2_results.csv'
+result_path_gpt2 = '[GPT model results]'
 
 def main():
     global args
@@ -75,11 +75,11 @@ def main():
                 dim_feedforward=256)
         
         if args.ablation == "all":
-            G.load_state_dict(torch.load('/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_g_false.pth'))
+            G.load_state_dict(torch.load('[model path]'))
         elif args.ablation == "noD":
-            G.load_state_dict(torch.load('/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_g.pth'))
+            G.load_state_dict(torch.load('[model path]'))
         elif args.ablation == "noL2":
-            G.load_state_dict(torch.load('/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_g_no_loss2.pth'))
+            G.load_state_dict(torch.load('[model path]'))
 
         discriminator = Discriminator(device)
         G.eval()
@@ -130,8 +130,8 @@ def main():
         hidden_size = 256
 
         if args.model == 'seq':
-            encoder_path = '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/encoder.pth'
-            decoder_path = '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/decoder.pth'
+            encoder_path = '[encoder path]'
+            decoder_path = '[decoder path]'
             encoder = EncoderRNN(input_lang_train.n_words, hidden_size, device)
             decoder = DecoderRNN(hidden_size, output_lang_train.n_words, device)
             encoder.load_state_dict(torch.load(encoder_path))
@@ -142,8 +142,8 @@ def main():
             decoder.eval()
 
         elif args.model == 'seqattn':
-            encoder_path = '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/encoder_attn.pth'
-            decoder_path = '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/decoder_attn.pth'
+            encoder_path = '[encoder path]'
+            decoder_path = '[decoder path]'
             encoder = EncoderRNN(input_lang_train.n_words, hidden_size, device)
             decoder = AttnDecoderRNN(hidden_size, output_lang_train.n_words, device, dropout_p=0.1)
             encoder.load_state_dict(torch.load(encoder_path))
