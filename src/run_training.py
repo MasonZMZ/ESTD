@@ -56,5 +56,5 @@ if __name__ == '__main__':
                        Lambda_1, Lambda_2, Contorl, emp_bos_idx, emp_dict_rev, act_dict_rev,
                        device, discriminative=True)
 
-    torch.save(Generator.state_dict(), '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_g_no_loss2.pth')
-    # torch.save(discriminator.state_dict(), '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_d.pth')
+    torch.save(Generator.state_dict(), '[model path]')
+    torch.save(discriminator.state_dict(), '[model path]')
