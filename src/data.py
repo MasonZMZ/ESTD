@@ -197,7 +197,7 @@ def decode_sents_(sentences, emp_dict_rev, act_dict_rev, is_emp=False):
     return decoded_sents
 
 
-def process_data(model_bias):
+def process_data(model_bias, other=False):
     contraction_dict = {"ain't": "is not", "aren't": "are not","can't": "cannot", "'cause": "because", "could've": "could have", "couldn't": "could not", "didn't": "did not",  "doesn't": "does not", "don't": "do not", "hadn't": "had not", "hasn't": "has not", "haven't": "have not", "he'd": "he would","he'll": "he will", "he's": "he is", "how'd": "how did", "how'd'y": "how do you", "how'll": "how will", "how's": "how is",  "I'd": "I would", "I'd've": "I would have", "I'll": "I will", "I'll've": "I will have","I'm": "I am", "I've": "I have", "i'd": "i would", "i'd've": "i would have", "i'll": "i will",  "i'll've": "i will have","i'm": "i am", "i've": "i have", "isn't": "is not", "it'd": "it would", "it'd've": "it would have", "it'll": "it will", "it'll've": "it will have","it's": "it is", "let's": "let us", "ma'am": "madam", "mayn't": "may not", "might've": "might have","mightn't": "might not","mightn't've": "might not have", "must've": "must have", "mustn't": "must not", "mustn't've": "must not have", "needn't": "need not", "needn't've": "need not have","o'clock": "of the clock", "oughtn't": "ought not", "oughtn't've": "ought not have", "shan't": "shall not", "sha'n't": "shall not", "shan't've": "shall not have", "she'd": "she would", "she'd've": "she would have", "she'll": "she will", "she'll've": "she will have", "she's": "she is", "should've": "should have", "shouldn't": "should not", "shouldn't've": "should not have", "so've": "so have","so's": "so as", "this's": "this is","that'd": "that would", "that'd've": "that would have", "that's": "that is", "there'd": "there would", "there'd've": "there would have", "there's": "there is", "here's": "here is","they'd": "they would", "they'd've": "they would have", "they'll": "they will", "they'll've": "they will have", "they're": "they are", "they've": "they have", "to've": "to have", "wasn't": "was not", "we'd": "we would", "we'd've": "we would have", "we'll": "we will", "we'll've": "we will have", "we're": "we are", "we've": "we have", "weren't": "were not", "what'll": "what will", "what'll've": "what will have", "what're": "what are",  "what's": "what is", "what've": "what have", "when's": "when is", "when've": "when have", "where'd": "where did", "where's": "where is", "where've": "where have", "who'll": "who will", "who'll've": "who will have", "who's": "who is", "who've": "who have", "why's": "why is", "why've": "why have", "will've": "will have", "won't": "will not", "won't've": "will not have", "would've": "would have", "wouldn't": "would not", "wouldn't've": "would not have", "y'all": "you all", "y'all'd": "you all would","y'all'd've": "you all would have","y'all're": "you all are","y'all've": "you all have","you'd": "you would", "you'd've": "you would have", "you'll": "you will", "you'll've": "you will have", "you're": "you are", "you've": "you have"}
     contractions, contractions_re = get_contractions(contraction_dict)
 
@@ -236,7 +236,77 @@ def process_data(model_bias):
     emp_test = [preprocess_sentence(sentence) for sentence in emp_test]
     act_test = [preprocess_sentence(sentence) for sentence in act_test]
 
+    if other:
+        return act_train, emp_train, act_test, emp_test
+
     train_act, train_emp = load_data(emp_train, act_train)
     valid_act, valid_emp = load_data(emp_test, act_test)
 
     return train_act, train_emp, valid_act, valid_emp
+
+
+class Lang:
+    def __init__(self, name):
+        self.name = name
+        self.word2index = {}
+        self.word2count = {}
+        self.index2word = {0: "SOS", 1: "EOS"}
+        self.n_words = 2  # Count SOS and EOS
+    def addSentence(self, sentence):
+        for word in sentence.split(' '):
+            self.addWord(word)
+    def addWord(self, word):
+        if word not in self.word2index:
+            self.word2index[word] = self.n_words
+            self.word2count[word] = 1
+            self.index2word[self.n_words] = word
+            self.n_words += 1
+        else:
+            self.word2count[word] += 1
+
+
+def readLangs(lang1, lang2, lines1, lines2, reverse=False):
+    print("Reading lines...")
+    # Read the file and split into lines
+    pairs = []
+    for i in range(len(lines1)):
+        pairs.append([lines1[i], lines2[i]])
+
+    # Reverse pairs, make Lang instances
+    input_lang = Lang(lang1)
+    output_lang = Lang(lang2)
+    
+    return input_lang, output_lang, pairs
+
+
+def prepareData(lang1, lang2, lines1, lines2, reverse=False):
+    input_lang, output_lang, pairs = readLangs(lang1, lang2, lines1, lines2, reverse)
+    print("Read %s sentence pairs" % len(pairs))
+    print("Trimmed to %s sentence pairs" % len(pairs))
+    print("Counting words...")
+    for pair in pairs:
+        input_lang.addSentence(pair[0])
+        output_lang.addSentence(pair[1])
+    print("Counted words:")
+    print(input_lang.name, input_lang.n_words)
+    print(output_lang.name, output_lang.n_words)
+    return input_lang, output_lang, pairs
+
+
+def indexesFromSentence(lang, sentence):
+    return [lang.word2index[word] for word in sentence.split(' ')]
+
+def tensorFromSentence(lang, sentence, EOS_token, device):
+    indexes = indexesFromSentence(lang, sentence)
+    indexes.append(EOS_token)
+    return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
+
+def tensorsFromPair_train(pair, input_lang_train, output_lang_train, EOS_token, device):
+    input_tensor = tensorFromSentence(input_lang_train, pair[0], EOS_token, device)
+    target_tensor = tensorFromSentence(output_lang_train, pair[1], EOS_token, device)
+    return (input_tensor, target_tensor)
+
+def tensorsFromPair_test(pair, input_lang_test, output_lang_test):
+    input_tensor = tensorFromSentence(input_lang_test, pair[0])
+    target_tensor = tensorFromSentence(output_lang_test, pair[1])
+    return (input_tensor, target_tensor)
