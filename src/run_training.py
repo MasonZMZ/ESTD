@@ -54,7 +54,7 @@ if __name__ == '__main__':
     loss = train_epoch(10, Generator, discriminator, train_dataloader, test_dataloader, 
                        optimizer_D, optimizer, loss_fn, loss_fn2, loss_fn_d, model_bias,
                        Lambda_1, Lambda_2, Contorl, emp_bos_idx, emp_dict_rev, act_dict_rev,
-                       device)
+                       device, discriminative=True)
 
-    # torch.save(Generator.state_dict(), '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_g.pth')
+    torch.save(Generator.state_dict(), '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_g_no_loss2.pth')
     # torch.save(discriminator.state_dict(), '/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_d.pth')
