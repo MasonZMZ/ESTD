@@ -8,7 +8,7 @@ def main():
     train_act, train_emp, valid_act, valid_emp = process_data(model_bias, True)
     dict = {'original': valid_act, 'target': valid_emp}  
     df = pd.DataFrame(dict) 
-    df.to_csv('/home/s4566656/anaconda3/envs/mason/empathy_pretrain/data/EmpathyTalk_test.csv') 
+    df.to_csv('[data path]') 
 
 
 if __name__ == '__main__':
