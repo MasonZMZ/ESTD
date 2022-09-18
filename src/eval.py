@@ -24,15 +24,20 @@ warnings.filterwarnings('ignore')
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=None)
 parser.add_argument('--gpu', default=0, type=int, help='GPU id to use.')
-parser.add_argument('--model', type=str, default="ESTD | seq | seqattn | gpt2 | gpt3")
+parser.add_argument('--model', type=str, default="ESTD", help="ESTD | seq | seqattn | gpt2 | bart")
 parser.add_argument('--ablation', type=str, default="all", help='all | noD | noL2')
+parser.add_argument('--nhead', type=int, default=8)
 
 args = None
 
 SOS_token = 0
 EOS_token = 1
 
-result_path_gpt2 = '[GPT model results]'
+result_path_gpt2 = 'GPT-2 results path'
+result_path_bart_result = 'BART results path'
+original_path_bart_result = 'BART original'
+target_path_bart_result = 'BART target'
+
 
 def main():
     global args
@@ -59,8 +64,8 @@ def main():
     if args.model == "ESTD":
         train_act, train_emp, valid_act, valid_emp = process_data(model_bias, other=False)
         # word -> index
-        act_dict, act_total_words = build_dict(train_act, 6000)
-        emp_dict, emp_total_words = build_dict(train_emp, 6000)
+        act_dict, act_total_words = build_dict(train_act, 8000)
+        emp_dict, emp_total_words = build_dict(train_emp, 8000)
 
         emp_bos_idx = emp_dict[BOS]
         emp_eos_idx = emp_dict[EOS]
@@ -69,17 +74,19 @@ def main():
         act_dict_rev = {v: k for k, v in act_dict.items()}
         emp_dict_rev = {v: k for k, v in emp_dict.items()}
 
-        test_dataloader = SentencesLoader(valid_act, valid_emp, act_dict, emp_dict, batch_size=20)
+        test_dataloader = SentencesLoader(valid_act, valid_emp, act_dict, emp_dict, batch_size=1) # Original: 10
 
-        G = Seq2Seq(3, 3, emb_size=256, nhead=8, src_vocab_size=act_total_words, tgt_vocab_size=emp_total_words,
+        G = Seq2Seq(3, 3, emb_size=256, nhead=args.nhead, src_vocab_size=act_total_words, tgt_vocab_size=emp_total_words,
                 dim_feedforward=256)
         
         if args.ablation == "all":
-            G.load_state_dict(torch.load('[model path]'))
+            G.load_state_dict(torch.load('model_path'))
         elif args.ablation == "noD":
-            G.load_state_dict(torch.load('[model path]'))
+            G.load_state_dict(torch.load('model_path'))
         elif args.ablation == "noL2":
-            G.load_state_dict(torch.load('[model path]'))
+            G.load_state_dict(torch.load('model_path'))
+        else:
+            G.load_state_dict(torch.load('model_path'))
 
         discriminator = Discriminator(device)
         G.eval()
@@ -99,6 +106,7 @@ def main():
                                                                         None,
                                                                         "ESTD",
                                                                         device,
+                                                                        valid_act,
                                                                         None)                                                                 
     elif args.model == "gpt2":
         train_act, train_emp, valid_act, valid_emp = process_data(model_bias, other=True)
@@ -121,6 +129,24 @@ def main():
                                                                         device,
                                                                         pairs_test)
 
+    elif args.model == "bart":
+        similarity, perplexity, bleu_score, empathy_change = evaluation(None, 
+                                                                        None, 
+                                                                        None, 
+                                                                        None, 
+                                                                        None, 
+                                                                        discriminator, 
+                                                                        model_bias, 
+                                                                        GPT_model, 
+                                                                        GPT_tokenizer,
+                                                                        None,
+                                                                        None,
+                                                                        None, 
+                                                                        None,
+                                                                        "bart",
+                                                                        device,
+                                                                        None)
+
     else:
         train_act, train_emp, valid_act, valid_emp = process_data(model_bias, other=True)
 
@@ -130,8 +156,8 @@ def main():
         hidden_size = 256
 
         if args.model == 'seq':
-            encoder_path = '[encoder path]'
-            decoder_path = '[decoder path]'
+            encoder_path = 'encoder.pth'
+            decoder_path = 'decoder.pth'
             encoder = EncoderRNN(input_lang_train.n_words, hidden_size, device)
             decoder = DecoderRNN(hidden_size, output_lang_train.n_words, device)
             encoder.load_state_dict(torch.load(encoder_path))
@@ -142,8 +168,8 @@ def main():
             decoder.eval()
 
         elif args.model == 'seqattn':
-            encoder_path = '[encoder path]'
-            decoder_path = '[decoder path]'
+            encoder_path = 'encoder_attn.pth'
+            decoder_path = 'decoder_attn.pth'
             encoder = EncoderRNN(input_lang_train.n_words, hidden_size, device)
             decoder = AttnDecoderRNN(hidden_size, output_lang_train.n_words, device, dropout_p=0.1)
             encoder.load_state_dict(torch.load(encoder_path))
@@ -174,7 +200,7 @@ def main():
     print(f"Similarity: {similarity} | Perplexity: {perplexity} | BLEU: {bleu_score} | Empathy Change: {empathy_change}")
 
 
-def translate(src, src_mask, emp_bos_idx, Generator, max_len=40):
+def transfer(src, src_mask, emp_bos_idx, Generator, max_len=40):
     memory = Generator.encode(src, src_mask)
     batch_size = src.size(1)
     ys = torch.ones(1, batch_size).fill_(emp_bos_idx).type(torch.long)
@@ -189,13 +215,10 @@ def translate(src, src_mask, emp_bos_idx, Generator, max_len=40):
     return ys
  
 
-def perplexity(predicted, GPT_model, GPT_tokenizer, device, MAX_LEN=40):
-    print("Calculating perplexity...")
-
-    batch_perplexity = []
+def perplexity(predicted, GPT_model, GPT_tokenizer, device, MAX_LEN=64):
 
     # for i in tqdm(range(len(predicted))):
-    BATCH_SIZE = 64
+    BATCH_SIZE = 1
 
     tokenized_input = GPT_tokenizer.batch_encode_plus(predicted, max_length=MAX_LEN, pad_to_max_length=True, truncation=True)
     
@@ -210,6 +233,8 @@ def perplexity(predicted, GPT_model, GPT_tokenizer, device, MAX_LEN=40):
     sampler = SequentialSampler(data)
     dataloader = DataLoader(data, sampler=sampler, batch_size = BATCH_SIZE)
 
+    batch_perplexity = []
+        
     with torch.no_grad():
 
         for batch in dataloader:
@@ -254,7 +279,7 @@ def bleu_score(pred, tgt, emp_dict_rev=None, act_dict_rev=None):
         length = len(decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev))
         for i in tqdm(range(length)):
             sent_bleu = sentence_bleu([decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev)[i]], 
-                                    decode_sents(tgt.transpose(0, 1), emp_dict_rev, act_dict_rev)[i], smoothing_function=smoothie)
+                                       decode_sents(tgt.transpose(0, 1), emp_dict_rev, act_dict_rev)[i], smoothing_function=smoothie)
             batch_bleu.append(sent_bleu)
     else:
         length = len(pred)
@@ -270,11 +295,13 @@ def empathy_change(src, pred, emp_dict_rev, act_dict_rev, model):
     if args.model == "ESTD":
         original_emp = torch.sum(model.predict(decode_sents(src.transpose(0, 1), emp_dict_rev, act_dict_rev, False)))
         generate_emp = torch.sum(model.predict(decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev)))
+        change = int(generate_emp) - int(original_emp)
+        return change 
     else:
         original_emp = torch.sum(model.predict(src))
         generate_emp = torch.sum(model.predict(pred))
-    change = int(generate_emp) - int(original_emp)
-    return change / len(pred)
+        change = int(generate_emp) - int(original_emp)
+        return change / len(pred)
 
 
 def evaluate(encoder, decoder, sentence, input_lang_test, output_lang_test, device, max_length=40):
@@ -339,6 +366,7 @@ def evaluation(test_dataloader,
                output_lang_test,
                type,
                device,
+               valid_act=None,
                pairs_test=None):
 
     similarities = []
@@ -347,16 +375,23 @@ def evaluation(test_dataloader,
     empathylevel = []
     
     if type == "ESTD":
+        index_sent = 0
         for _, (src, src_lens, tgt, tgt_lens) in enumerate(tqdm(test_dataloader)):
             src = src.transpose(0, 1)
             tgt = tgt.transpose(0, 1)
             tgt_input = tgt[:-1, :]
             src_mask, tgt_mask, src_padding_mask, tgt_padding_mask = create_mask(src, tgt_input)
             
-            pred = translate(src, src_mask, emp_bos_idx, model_g)
-
+            pred = transfer(src, src_mask, emp_bos_idx, model_g)
+            print('-' * 20)
+            print(valid_act[index_sent])
+            index_sent += 1
+            print(decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev))
+            print('-' * 20)
             similarities.append(similarity(tgt, pred, model_bias, emp_dict_rev, act_dict_rev))
-            perplexities.append(perplexity(decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev), GPT_model, GPT_tokenizer, device))
+
+            # print("Calculating perplexity...")
+            perplexities.append(perplexity(decode_sents(pred.transpose(0, 1), emp_dict_rev, act_dict_rev), GPT_model, GPT_tokenizer, device) / 20)
             bleu_scores.append(bleu_score(pred, src, emp_dict_rev, act_dict_rev))
             empathylevel.append(empathy_change(src, pred, emp_dict_rev, act_dict_rev, model_d))
 
@@ -365,7 +400,7 @@ def evaluation(test_dataloader,
         gpt2_results = list(gpt2_results.iloc[:])
         pairs_test_ = pairs_test.copy()
         pairs_test_.pop(1274)
-        pairs_test_.pop(1145)
+        pairs_test_.pop(1146)
 
         targets = []
         srcs = []
@@ -373,11 +408,29 @@ def evaluation(test_dataloader,
         for i in range(len(pairs_test_)):
             targets.append(pairs_test_[i][1])
             srcs.append(pairs_test_[i][0])
-
+           
         similarities.append(similarity(targets, gpt2_results, model_bias))
+
+        print("Calculating perplexity...")
         perplexities.append(perplexity(gpt2_results, GPT_model, GPT_tokenizer, device))
         bleu_scores.append(bleu_score(gpt2_results, srcs))
         empathylevel.append(empathy_change(srcs, gpt2_results, None, None, model_d))
+    
+    elif type == "bart":
+        bart_results = pd.read_csv(result_path_bart_result)['result']
+        bart_original = pd.read_csv(original_path_bart_result)['result']
+        bart_target = pd.read_csv(target_path_bart_result)['result']
+
+        bart_results = list(bart_results.iloc[:])
+        bart_original = list(bart_original.iloc[:])
+        bart_target = list(bart_target.iloc[:])
+           
+        similarities.append(similarity(bart_target, bart_results, model_bias))
+
+        print("Calculating perplexity...")
+        perplexities.append(perplexity(bart_results, GPT_model, GPT_tokenizer, device))
+        bleu_scores.append(bleu_score(bart_results, bart_original))
+        empathylevel.append(empathy_change(bart_original, bart_results, None, None, model_d))
 
     else:
         predictions = []
@@ -397,6 +450,8 @@ def evaluation(test_dataloader,
             srcs.append(pairs_test[i][0])
         
         similarities.append(similarity(targets, predictions, model_bias))
+
+        print("Calculating perplexity...")
         perplexities.append(perplexity(predictions, GPT_model, GPT_tokenizer, device))
         bleu_scores.append(bleu_score(predictions, srcs))
         empathylevel.append(empathy_change(srcs, predictions, None, None, model_d))
