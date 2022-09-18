@@ -50,7 +50,6 @@ class BertClassifier(nn.Module):
 
 
 def generate_square_subsequent_mask(sz):
-    """防止一次读入全部目标序列，一次多读一个字符 ， 为-inf会被忽略（float tensor视为权重）"""
     mask = (torch.triu(torch.ones((sz, sz))) == 1).transpose(0, 1)
     mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
     return mask
@@ -61,10 +60,8 @@ def create_mask(src, tgt):
     tgt_seq_len = tgt.shape[0]
 
     tgt_mask = generate_square_subsequent_mask(tgt_seq_len)
-    # False：不忽略，True：忽略
     src_mask = torch.zeros((src_seq_len, src_seq_len)).type(torch.bool)
 
-    # 标记pad字符，为true的是pad，将会被忽略
     src_padding_mask = (src == PAD_IDX).transpose(0, 1)
     tgt_padding_mask = (tgt == PAD_IDX).transpose(0, 1)
     return src_mask, tgt_mask, src_padding_mask, tgt_padding_mask
@@ -73,10 +70,6 @@ def create_mask(src, tgt):
 class PositionalEncoding(nn.Module):
     def __init__(self, emb_size: int, max_len: int = 5000, dropout: float = 0.2):
         super(PositionalEncoding, self).__init__()
-        # Position Encoding. Transformer位置无关，需要加上位置编码。 i in [0,emb_size/2)
-        # PE(pos,2i) = sin(pos/10000^(2i/d)) # 偶数位置
-        # PE(pos,2i+1) = cos(pos/10000^(2i/d)) # 奇数位置
-        # 对 pos/10000^(2i/d) 取log就是下面的东西
         den = torch.exp(-torch.arange(0, emb_size, 2) * math.log(10000) / emb_size)
         pos = torch.arange(0, max_len).reshape(max_len, 1)
         pos_emb = torch.zeros((max_len, emb_size))
@@ -119,8 +112,6 @@ class Seq2Seq(nn.Module):
         src_emb = self.positional_encoding(self.src_token_emb(src))
         tgt_emb = self.positional_encoding(self.tgt_token_emb(tgt))
 
-        # memory_mask设置为None,不需要mask; memory=encoder(input)
-        # memory_key_padding_mask 和 src_padding_mask 一样，
         outs = self.transformer(src_emb, tgt_emb, src_mask, tgt_mask, None, src_padding_mask, tgt_padding_mask,
                                 memory_key_padding_mask)
         return self.generator(outs)
