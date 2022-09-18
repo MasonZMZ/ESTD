@@ -174,7 +174,7 @@ class Discriminator(nn.Module):
                     output_er = self.model_er(input_id, mask)
                     output_ex = self.model_ex(input_id, mask)
                     output_ir = self.model_ir(input_id, mask)
-                
+
             final_output = output_er.argmax(dim=1).item() + output_ex.argmax(dim=1).item() + output_ir.argmax(dim=1).item()
             final_outputs.append(float(final_output))
 
