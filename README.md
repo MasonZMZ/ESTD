@@ -10,9 +10,9 @@ we employ ESTD to transfer a sentence from the source to the target text(higher 
 ```
 conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
 pip install transformers
+pip install datasets
 ```
 ## Preparing Data
-pip install datasets
 
 ```
 from datasets import load_dataset
