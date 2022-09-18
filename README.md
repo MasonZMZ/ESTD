@@ -1,8 +1,8 @@
 # ESTD: Empathy Style Transformer with Discriminative mechanism
-[ADMA 2022] Mingzhe Zhang*, Lin Yue, Miao Xu
+[ADMA 2022] Mingzhe Zhang, Lin Yue, Miao Xu*
 
 # Overview
-we employ ESTD to transfer a sentence from the source to the target text(higher empathy level). 
+we employ ESTD to transfer a sentence from the source to the target text(higher empathy level). We believe our method and findings are a crucial step in establishing a friendly and inclusive online communication environment while furthering the development of a mental health platform. 
 
 ![structure](https://github.com/MasonZMZ/ESTD/blob/main/img/newStructure.png)
 # Set-up
