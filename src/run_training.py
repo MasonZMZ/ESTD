@@ -43,13 +43,9 @@ if __name__ == '__main__':
     loss_fn_d = nn.MSELoss()
     optimizer = torch.optim.Adam(Generator.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
     optimizer_D = torch.optim.Adam(discriminator.parameters())
+    
     SIGMOD_1 = 0.5
     SIGMOD_2 = 0.5
-
-    Lambda_1 = 1 / SIGMOD_1**2
-    Lambda_2 = 1 / SIGMOD_2**2
-
-    Contorl = 2 * np.log(SIGMOD_1) + 2 * np.log(SIGMOD_2)
 
     loss = train_epoch(10, Generator, discriminator, train_dataloader, test_dataloader, 
                        optimizer_D, optimizer, loss_fn, loss_fn2, loss_fn_d, model_bias,
