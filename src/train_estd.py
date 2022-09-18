@@ -13,8 +13,7 @@ from model import create_mask, generate_square_subsequent_mask
 def train_epoch(num_epochs, Generator, discriminator, train_dataloader, 
                 test_dataloader, optimizer_D, optimizer, loss_fn, loss_fn2,
                 loss_fn_d, model_bert, Lambda_1, Lambda_2, Contorl, emp_bos_idx, 
-                emp_dict_rev, act_dict_rev, device, discriminative=True):
-
+                emp_dict_rev, act_dict_rev, device, discriminative=True, theta=False):
 
     def pad_shortsent(sents, lens_long):
         sents_padded = sents
@@ -53,45 +52,6 @@ def train_epoch(num_epochs, Generator, discriminator, train_dataloader,
 
     Generator.train()
     for epoch in range(num_epochs):
-        # for i, (src, src_lens, tgt, tgt_lens) in enumerate(tqdm(train_dataloader)):
-        #     optimizer_D.zero_grad()
-        #     src_ = src
-        #     src = src.transpose(0, 1)
-        #     tgt = tgt.transpose(0, 1)
-
-        #     # 去掉最后一个字符, input:[BOS,w1,w2] -> output:[w1,w2,BOS]
-        #     tgt_input = tgt[:-1, :]
-        #     tgt_out = tgt[1:, :]
-
-        #     src_mask, tgt_mask, src_padding_mask, tgt_padding_mask = create_mask(src, tgt_input)
-        #     src_ = [list([int(word) for word in sen]) for sen in src_]
-            
-        #     src_ = decode_sents_(src_, emp_dict_rev, act_dict_rev)
-        #     d_real_pred = discriminator.predict(src_)
-           
-        #     d_real_label = torch.ones(d_real_pred.shape[0], dtype=torch.float).to(device)
-        #     d_real_label = torch.where(d_real_label == 1.0, 6.0, d_real_label)
-            
-        #     d_real_error = loss_fn_d(d_real_pred.reshape(-1, 1).to(device), d_real_label.reshape(-1, 1).to(device))  # sixs = true
-        #     d_real_error = Variable(d_real_error, requires_grad = True)
-        #     d_real_error.backward() # compute/store gradients, but don't change params
-
-        #     # d_fake_data = Generator(src, tgt_input, src_mask, tgt_mask, src_padding_mask, tgt_padding_mask, src_padding_mask).detach()  # detach to avoid training G on these labels
-
-        #     d_pred_sent = translate(src, src_mask, emp_bos_idx, tgt_out.shape[0] - 1)
-        #     d_pred_sent = decode_sents(d_pred_sent, emp_dict_rev, act_dict_rev)
-
-        #     d_fake_pred = discriminator.predict(d_pred_sent)
-        #     d_fake_label_ = torch.zeros(d_fake_pred.shape[0], dtype=torch.double).to(device)
-        #     d_fake_error = loss_fn_d(d_fake_pred.reshape(-1, 1).to(device), d_fake_label_.reshape(-1, 1).to(device))  # zeros = fake
-        #     d_fake_error = Variable(d_fake_error, requires_grad = True)
-        #     d_fake_error.backward()
-
-        #     D_error = d_real_error + d_fake_error
-        #     optimizer_D.step()
-
-        #     if i % 50 == 0:
-        #         print(f"Discriminator Training: {i + 1}/{len(train_dataloader)} Error_D: {D_error}")
 
         for i, (src, src_lens, tgt, tgt_lens) in enumerate(tqdm(train_dataloader)):
             
@@ -109,31 +69,26 @@ def train_epoch(num_epochs, Generator, discriminator, train_dataloader,
             src_out = src[1:, :]
 
             src_mask, tgt_mask, src_padding_mask, tgt_padding_mask = create_mask(src, tgt_input)
-
+            
             optimizer.zero_grad()
-
             g_fake_data = Generator(src, tgt_input, src_mask, tgt_mask, src_padding_mask, tgt_padding_mask, src_padding_mask)
 
             pred_sent = translate(src, src_mask, emp_bos_idx, tgt_out.shape[0] - 1)
             orig_sent = src_out
+
+            pred_sent = decode_sents(pred_sent, emp_dict_rev, act_dict_rev) 
+            orig_sent = decode_sents(orig_sent, emp_dict_rev, act_dict_rev, False)
             
             # ============= Discriminator =============
 
             if discriminative:
-                dg_pred_sent = pred_sent
-                dg_pred_sent = decode_sents(dg_pred_sent, emp_dict_rev, act_dict_rev)
-
-                dg_fake_pred = discriminator.predict(dg_pred_sent)
+                dg_fake_pred = discriminator.predict(pred_sent)
 
                 dg_fake_label = torch.ones(dg_fake_pred.shape[0], dtype=torch.float).to(device)
                 dg_fake_label = torch.where(dg_fake_label == 1.0, 6.0, dg_fake_label)
-
+                
                 dg_fake_error = loss_fn_d(dg_fake_pred.reshape(-1, 1).to(device), dg_fake_label.reshape(-1, 1).to(device))  # 6.0 is the max empathy score
                 dg_fake_error = Variable(dg_fake_error, requires_grad = True)
-                dg_fake_error.backward() # compute/store gradients, but don't change params
-
-            pred_sent = decode_sents(pred_sent, emp_dict_rev, act_dict_rev)
-            orig_sent = decode_sents(orig_sent, emp_dict_rev, act_dict_rev, False)
 
             pred_sent = model_bert.encode(pred_sent)
             orig_sent = model_bert.encode(orig_sent)
@@ -141,22 +96,23 @@ def train_epoch(num_epochs, Generator, discriminator, train_dataloader,
             pred_sent = torch.from_numpy(pred_sent)
             orig_sent = torch.from_numpy(orig_sent)
 
-            # =======================================
-
             loss1 = loss_fn(g_fake_data.reshape(-1, g_fake_data.shape[-1]), tgt_out.reshape(-1))
-            loss1.backward()
 
-            loss2 = loss_fn2(pred_sent, orig_sent)
-            loss2 = Variable(loss2.mean(), requires_grad=True)
-            loss2.backward()
+            if theta:
+                loss2 = loss_fn2(pred_sent, orig_sent)
+                loss2 = 1 - loss2
+                loss2 = Variable(loss2.mean(), requires_grad=True)
 
-            losses = torch.tensor((Lambda_1 * loss1.item() + Lambda_2 * loss2.mean().item() + Contorl))
-            losses = Variable(losses, requires_grad=True)
+                losses = 0.7 * loss1 + 0.05 * loss2 + 0.025 * dg_fake_error 
+                losses.backward()
+            
             optimizer.step()
 
             if i % 100 == 0:
                 test_translate(emp_bos_idx)
                 print(loss1.item())
                 print(f"Generator Training: {i + 1}/{len(train_dataloader)}")
+
+
 
     
