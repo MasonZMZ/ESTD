@@ -89,7 +89,6 @@ def load_data(emp_list, act_list):
     return new_act_list, new_emp_list
 
 
-
 def build_dict(sentences, max_words=6000):
     counter = Counter()
     for sentence in sentences:
@@ -106,16 +105,20 @@ def build_dict(sentences, max_words=6000):
 def encode_sentences(sents, word_dict: dict):
     return [[word_dict.get(w, UNK_IDX) for w in s] for s in sents]
 
+
 def decode_sentences(sents, word_dict_rev: dict):
     sents = sents.numpy()
     return [[word_dict_rev.get(w, UNK) for w in s] for s in sents]
 
+
 def decode_sentences_(sents, word_dict_rev: dict):
     return [[word_dict_rev.get(w, UNK) for w in s] for s in sents]
+
 
 def sort_sentences(act_sents, emp_sents):
     idx = sorted(range(len(act_sents)), key=lambda x: len(act_sents[x]))
     return [act_sents[i] for i in idx], [emp_sents[i] for i in idx]
+
 
 class SentencesLoader:
 
@@ -296,15 +299,18 @@ def prepareData(lang1, lang2, lines1, lines2, reverse=False):
 def indexesFromSentence(lang, sentence):
     return [lang.word2index[word] for word in sentence.split(' ')]
 
+
 def tensorFromSentence(lang, sentence, EOS_token, device):
     indexes = indexesFromSentence(lang, sentence)
     indexes.append(EOS_token)
     return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
 
+
 def tensorsFromPair_train(pair, input_lang_train, output_lang_train, EOS_token, device):
     input_tensor = tensorFromSentence(input_lang_train, pair[0], EOS_token, device)
     target_tensor = tensorFromSentence(output_lang_train, pair[1], EOS_token, device)
     return (input_tensor, target_tensor)
+
 
 def tensorsFromPair_test(pair, input_lang_test, output_lang_test):
     input_tensor = tensorFromSentence(input_lang_test, pair[0])
