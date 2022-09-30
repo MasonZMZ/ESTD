@@ -18,7 +18,7 @@ we employ ESTD to transfer a sentence from the source to the target text(higher 
 ![Nvidia](http://img.shields.io/badge/-RTX_A6000_48GB-eee?style=flat&logo=NVIDIA&logoColor=76B900&label=NVIDIA)
 
 ## Environment
-```
+```console
 conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
 pip install transformers
 pip install datasets
@@ -32,12 +32,12 @@ dataset = load_dataset("blended_skill_talk")
 
 # Evaluation
 ## Evaluation Code
-```
+```console
 python eval.py --gpu 0 --modelpath [model_path] --model ESTD
 ```
 
 # Training
-```
+```console
 python /src/run_training.py
 ```
 
