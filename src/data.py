@@ -8,7 +8,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from tqdm import tqdm
 
-
 BOS = "BOS"  
 EOS = "EOS" 
 
@@ -18,11 +17,15 @@ PAD = "PAD"
 PAD_IDX = 0
 UNK_IDX = 1
 
+MIN_SIMILARITY = 0.5
+
 dataset = load_dataset("blended_skill_talk")
+
 
 def del_comma_seq(x):
     x = re.sub('_comma_', ',', x)
     return x
+
 
 def preprocess_sentence(sentence):
     sentence = sentence.lower().strip()
@@ -34,6 +37,7 @@ def preprocess_sentence(sentence):
     sentence = sentence.strip()
     return sentence
 
+
 def get_contractions(contraction_dict):
     contraction_re = re.compile('(%s)' % '|'.join(contraction_dict.keys()))
     return contraction_dict, contraction_re
@@ -43,6 +47,7 @@ def replace_contractions(text, contractions, contractions_re):
     def replace(match):
         return contractions[match.group(0)]
     return contractions_re.sub(replace, text)
+
 
 class MyDataset(torch.utils.data.Dataset):
     def __init__(self, x_data, y_data): 
@@ -57,19 +62,19 @@ class MyDataset(torch.utils.data.Dataset):
     def __len__(self): 
         return self.length 
 
-
+    
 def unbias_data(sentences_act, sentences_emp, model):
     print("Prepare BERT pretrained model for data unbias...")
     
     sentence_embeddings_act = model.encode(sentences_act)
     sentence_embeddings_emp = model.encode(sentences_emp)
-    # print(sentence_embeddings_act[0].shape)
+
     emp_list = []
     act_list = []
 
     for i in tqdm(range(len(sentences_act))):
         similarity = cosine_similarity([sentence_embeddings_act[i]],[sentence_embeddings_emp[i]])
-        if similarity[0][0] >= 0.5:
+        if similarity[0][0] >= MIN_SIMILARITY:
             act_list.append(sentences_act[i])
             emp_list.append(sentences_emp[i])
     
@@ -184,6 +189,7 @@ def decode_sents(sentences, emp_dict_rev, act_dict_rev, is_emp=True):
         decoded_sents.append(" ".join(sent))
     return decoded_sents
 
+
 def decode_sents_(sentences, emp_dict_rev, act_dict_rev, is_emp=False):
     word_dict_rev = emp_dict_rev if is_emp else act_dict_rev
     r = decode_sentences_(sentences, word_dict_rev=word_dict_rev)
@@ -216,11 +222,15 @@ def process_data(model_bias, other=False):
         for j in range(len(dataset['train'][i]['suggestions']['empathetic_dialogues'])):
             emp_lines_train.append(dataset['train'][i]['suggestions']['empathetic_dialogues'][j])
             act_lines_train.append(dataset['train'][i]['suggestions']['convai2'][j])
+            emp_lines_train.append(dataset['train'][i]['suggestions']['empathetic_dialogues'][j])
+            act_lines_train.append(dataset['train'][i]['suggestions']['wizard_of_wikipedia'][j])
 
     for i in tqdm(range(len(dataset['test']))):
         for j in range(len(dataset['test'][i]['suggestions']['empathetic_dialogues'])):
             emp_lines_test.append(dataset['test'][i]['suggestions']['empathetic_dialogues'][j])
             act_lines_test.append(dataset['test'][i]['suggestions']['convai2'][j])
+            emp_lines_test.append(dataset['test'][i]['suggestions']['empathetic_dialogues'][j])
+            act_lines_test.append(dataset['test'][i]['suggestions']['wizard_of_wikipedia'][j])
 
     act_train, emp_train = unbias_data(act_lines_train, emp_lines_train, model_bias)
     act_test, emp_test = unbias_data(act_lines_test, emp_lines_test, model_bias)
@@ -267,7 +277,7 @@ class Lang:
         else:
             self.word2count[word] += 1
 
-
+            
 def readLangs(lang1, lang2, lines1, lines2, reverse=False):
     print("Reading lines...")
     # Read the file and split into lines
