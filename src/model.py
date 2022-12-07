@@ -136,9 +136,9 @@ class Discriminator(nn.Module):
         self.model_ex = BertClassifier()
         self.model_ir = BertClassifier()
 
-        self.model_er.load_state_dict(torch.load('/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_er.pth'))
-        self.model_ex.load_state_dict(torch.load('/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_ex.pth'))
-        self.model_ir.load_state_dict(torch.load('/home/s4566656/anaconda3/envs/mason/empathy_pretrain/model_ir.pth'))
+        self.model_er.load_state_dict(torch.load('./model_er.pth'))
+        self.model_ex.load_state_dict(torch.load('./model_ex.pth'))
+        self.model_ir.load_state_dict(torch.load('./model_ir.pth'))
 
         self.model_er.to(self.device)
         self.model_ex.to(self.device)
