@@ -91,7 +91,6 @@ class TokenEmbedding(nn.Module):
         self.emb_size = emb_size
 
     def forward(self, tokens: Tensor):
-        # embedding 是分布是N(0,1)，乘上math.sqrt(self.emb_size)，增加var
         return self.embedding(tokens.long()) * math.sqrt(self.emb_size)
 
 
