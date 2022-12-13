@@ -40,10 +40,3 @@ python eval.py --gpu 0 --modelpath [model_path] --model ESTD
 ```console
 python /src/run_training.py
 ```
-
-## Reproduce
-| Original Utterance | Rewritten Utterance |
-| ---- | ---- | 
-| Well, you better figure out how to fix it.  | I'am sorry to hear that. It will be tough time.| 
-| Oh, just a nail? You are a nice person.     | I'am sorry to hear that. How do you feel? | 
-| Some here would love to go.                 | I like to get my free time too. You can to me, lol.| 
