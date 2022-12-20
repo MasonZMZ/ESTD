@@ -5,7 +5,7 @@ import torch
 import nltk
 from datasets import load_dataset
 from sklearn.metrics.pairwise import cosine_similarity
-
+import random
 from tqdm import tqdm
 
 BOS = "BOS"  
@@ -91,6 +91,11 @@ def load_data(emp_list, act_list):
     for i in tqdm(range(len(emp_list))):
         new_emp_list.append([BOS] + nltk.word_tokenize(emp_list[i].lower()) + [EOS])
         new_act_list.append([BOS] + nltk.word_tokenize(act_list[i].lower()) + [EOS])
+        
+    shuffle_list = list(zip(new_emp_list, new_act_list))
+    random.shuffle(shuffle_list)
+    new_emp_list[:], new_act_list[:] = zip(*shuffle_list)
+        
     return new_act_list, new_emp_list
 
 
